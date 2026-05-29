@@ -43,7 +43,6 @@
             <p>本次存款：{{ savings }}元</p>
             <p class="total-savings">累计存款：{{ totalSavings }}元</p>
         </div>
-        <van-button type="primary" block @click="generateNumbers">重新生成</van-button>
         <van-button type="success" block @click="saveToday" style="margin-top: 10px;">保存今日数据</van-button>
         <van-button type="warning" block @click="showHistory" style="margin-top: 10px;">查看历史</van-button>
         <van-dialog v-model:show="showHistoryDialog" title="存款历史" show-cancel-button>
@@ -59,6 +58,7 @@
         const { createApp, ref, onMounted } = Vue
         const app = createApp({
             setup() {
+                const startDate = new Date('2026-05-26')
                 const today = ref(new Date().toLocaleDateString())
                 const numbers = ref([])
                 const savings = ref(0)
@@ -70,23 +70,59 @@
                     const savedData = localStorage.getItem('savingsData')
                     if (savedData) {
                         const data = JSON.parse(savedData)
-                        totalSavings.value = data.totalSavings || 0
+                        // 重新计算累计存款
+                        let cumulativeSavings = 0
+                        data.history.forEach((record, index) => {
+                            cumulativeSavings += record.savings
+                        })
+                        totalSavings.value = cumulativeSavings
                         history.value = data.history || []
+                    }
+
+                    // 检查今天是否已经生成过数据
+                    const todayData = localStorage.getItem('todayData')
+                    if (todayData) {
+                        const parsedData = JSON.parse(todayData)
+                        if (parsedData.date === today.value) {
+                            numbers.value = parsedData.numbers
+                            savings.value = parsedData.savings
+                        } else {
+                            generateNumbers()
+                        }
+                    } else {
+                        generateNumbers()
                     }
                 }
 
                 function saveToday() {
+                    // 检查今天是否已经保存过
+                    const todayData = localStorage.getItem('todayData')
+                    if (todayData) {
+                        const parsedData = JSON.parse(todayData)
+                        if (parsedData.date === today.value) {
+                            vant.Notify({ type: 'warning', message: '今日数据已保存' });
+                            return
+                        }
+                    }
+
                     const record = {
                         date: today.value,
                         numbers: numbers.value,
                         savings: savings.value
                     }
 
-                    // 更新总存款
-                    totalSavings.value += savings.value
+                    // 保存今日数据
+                    localStorage.setItem('todayData', JSON.stringify({
+                        date: today.value,
+                        numbers: numbers.value,
+                        savings: savings.value
+                    }))
 
                     // 添加到历史记录
                     history.value.push(record)
+
+                    // 更新总存款
+                    totalSavings.value += savings.value
 
                     // 保存到本地存储
                     localStorage.setItem('savingsData', JSON.stringify({
@@ -102,6 +138,17 @@
                 }
 
                 function generateNumbers() {
+                    // 如果今天已经有数据，不重新生成
+                    const todayData = localStorage.getItem('todayData')
+                    if (todayData) {
+                        const parsedData = JSON.parse(todayData)
+                        if (parsedData.date === today.value) {
+                            numbers.value = parsedData.numbers
+                            savings.value = parsedData.savings
+                            return
+                        }
+                    }
+
                     const newNumbers = []
                     const usedNumbers = new Set()
 
@@ -115,11 +162,17 @@
 
                     numbers.value = newNumbers
                     savings.value = newNumbers.reduce((a, b) => a + b, 0)
+
+                    // 保存今日数据
+                    localStorage.setItem('todayData', JSON.stringify({
+                        date: today.value,
+                        numbers: numbers.value,
+                        savings: savings.value
+                    }))
                 }
 
                 // 初始化
                 onMounted(() => {
-                    generateNumbers()
                     loadData()
                 })
 
@@ -130,7 +183,6 @@
                     totalSavings,
                     history,
                     showHistoryDialog,
-                    generateNumbers,
                     saveToday,
                     showHistory
                 }
