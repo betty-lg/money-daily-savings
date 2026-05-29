@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>每日存钱小程序</title>
+    <link rel="stylesheet" href="https://unpkg.com/vant/lib/index.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/vant/lib/vant.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js"></script>
+    <style>
+        body {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .money-card {
+            background-color: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .total-savings {
+            color: #4CAF50;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <h1>每日存钱</h1>
+        <div class="money-card">
+            <p>日期：{{ today }}</p>
+            <p>随机数：{{ numbers }}</p>
+            <p>本次存款：{{ savings }}元</p>
+            <p class="total-savings">累计存款：{{ totalSavings }}元</p>
+        </div>
+        <van-button type="primary" block @click="generateNumbers">重新生成</van-button>
+        <van-button type="success" block @click="saveToday" style="margin-top: 10px;">保存今日数据</van-button>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue
+
+        // Initialize Firebase (replace with your config)
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        const app = createApp({
+            setup() {
+                const today = ref(new Date().toLocaleDateString())
+                const numbers = ref([])
+                const savings = ref(0)
+                const totalSavings = ref(0)
+
+                async function loadTotalSavings() {
+                    const docRef = db.collection('savings').doc('total')
+                    const doc = await docRef.get()
+                    if (doc.exists) {
+                        totalSavings.value = doc.data().amount || 0
+                    }
+                }
+
+                async function saveToday() {
+                    try {
+                        // 保存今天的数据
+                        await db.collection('daily_savings').add({
+                            date: today.value,
+                            numbers: numbers.value,
+                            savings: savings.value
+                        })
+
+                        // 更新累计存款
+                        const newTotal = totalSavings.value + savings.value
+                        await db.collection('savings').doc('total').set({
+                            amount: newTotal
+                        })
+
+                        totalSavings.value = newTotal
+                        vant.Notify({ type: 'success', message: '保存成功' });
+                    } catch (error) {
+                        vant.Notify({ type: 'danger', message: '保存失败' });
+                    }
+                }
+
+                function generateNumbers() {
+                    const newNumbers = []
+                    const usedNumbers = new Set()
+
+                    while (newNumbers.length < 3) {
+                        const num = Math.floor(Math.random() * 365) + 1
+                        if (!usedNumbers.has(num)) {
+                            newNumbers.push(num)
+                            usedNumbers.add(num)
+                        }
+                    }
+
+                    numbers.value = newNumbers
+                    savings.value = newNumbers.reduce((a, b) => a + b, 0)
+                }
+
+                // 初始化生成并加载总存款
+                onMounted(() => {
+                    generateNumbers()
+                    loadTotalSavings()
+                })
+
+                return {
+                    today,
+                    numbers,
+                    savings,
+                    totalSavings,
+                    generateNumbers,
+                    saveToday
+                }
+            }
+        })
+
+        app.use(vant)
+        app.mount('#app')
+    </script>
+</body>
+</html>
