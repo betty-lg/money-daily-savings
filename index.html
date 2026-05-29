@@ -40,11 +40,25 @@
         <div class="money-card">
             <p>日期：{{ today }}</p>
             <p>第 {{ dayNumber }} 天</p>
-            <p>随机数：{{ numbers }}</p>
-            <p>本次存款：{{ savings }}元</p>
+            <template v-if="hasGeneratedToday">
+                <p>随机数：{{ numbers }}</p>
+                <p>本次存款：{{ savings }}元</p>
+            </template>
+            <template v-else>
+                <p>今日未生成随机数</p>
+                <p>本次存款：0元</p>
+            </template>
             <p class="total-savings">累计存款：{{ totalSavings }}元</p>
         </div>
-        <van-button type="success" block @click="saveToday" style="margin-top: 10px;">保存今日数据</van-button>
+        <van-button
+            type="success"
+            block
+            @click="generateAndSaveToday"
+            :disabled="hasGeneratedToday"
+            style="margin-top: 10px;"
+        >
+            {{ hasGeneratedToday ? '今日已生成' : '生成今日随机数' }}
+        </van-button>
         <van-button type="warning" block @click="showHistory" style="margin-top: 10px;">查看历史</van-button>
         <van-dialog v-model:show="showHistoryDialog" title="存款历史" show-cancel-button>
             <van-cell-group>
@@ -56,10 +70,10 @@
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue
+        const { createApp, ref, onMounted, computed } = Vue
         const app = createApp({
             setup() {
-                const startDate = new Date('2026-05-26')
+                const startDate = new Date('2026-05-29')
                 const today = ref(new Date().toLocaleDateString())
                 const dayNumber = ref(1)
                 const numbers = ref([])
@@ -67,6 +81,7 @@
                 const totalSavings = ref(0)
                 const history = ref([])
                 const showHistoryDialog = ref(false)
+                const hasGeneratedToday = ref(false)
 
                 function calculateDayNumber(currentDate) {
                     const current = new Date(currentDate)
@@ -95,62 +110,18 @@
                         if (parsedData.date === today.value) {
                             numbers.value = parsedData.numbers
                             savings.value = parsedData.savings
-                        } else {
-                            generateNumbers()
+                            hasGeneratedToday.value = true
                         }
-                    } else {
-                        generateNumbers()
                     }
                 }
 
-                function saveToday() {
-                    // 检查今天是否已经保存过
+                function generateAndSaveToday() {
+                    // 检查今天是否已经生成过
                     const todayData = localStorage.getItem('todayData')
                     if (todayData) {
                         const parsedData = JSON.parse(todayData)
                         if (parsedData.date === today.value) {
-                            vant.Notify({ type: 'warning', message: '今日数据已保存' });
-                            return
-                        }
-                    }
-
-                    const record = {
-                        date: today.value,
-                        dayNumber: dayNumber.value,
-                        numbers: numbers.value,
-                        savings: savings.value
-                    }
-
-                    // 保存今日数据
-                    localStorage.setItem('todayData', JSON.stringify({
-                        date: today.value,
-                        numbers: numbers.value,
-                        savings: savings.value
-                    }))
-
-                    // 添加到历史记录
-                    history.value.push(record)
-
-                    // 保存到本地存储
-                    localStorage.setItem('savingsData', JSON.stringify({
-                        history: history.value
-                    }))
-
-                    vant.Notify({ type: 'success', message: '保存成功' });
-                }
-
-                function showHistory() {
-                    showHistoryDialog.value = true
-                }
-
-                function generateNumbers() {
-                    // 如果今天已经有数据，不重新生成
-                    const todayData = localStorage.getItem('todayData')
-                    if (todayData) {
-                        const parsedData = JSON.parse(todayData)
-                        if (parsedData.date === today.value) {
-                            numbers.value = parsedData.numbers
-                            savings.value = parsedData.savings
+                            vant.Notify({ type: 'warning', message: '今日已生成' });
                             return
                         }
                     }
@@ -166,15 +137,43 @@
                         }
                     }
 
-                    numbers.value = newNumbers
-                    savings.value = newNumbers.reduce((a, b) => a + b, 0)
+                    const todaySavings = newNumbers.reduce((a, b) => a + b, 0)
+
+                    const record = {
+                        date: today.value,
+                        dayNumber: dayNumber.value,
+                        numbers: newNumbers,
+                        savings: todaySavings
+                    }
 
                     // 保存今日数据
                     localStorage.setItem('todayData', JSON.stringify({
                         date: today.value,
-                        numbers: numbers.value,
-                        savings: savings.value
+                        numbers: newNumbers,
+                        savings: todaySavings
                     }))
+
+                    // 添加到历史记录
+                    history.value.push(record)
+
+                    // 更新总存款
+                    totalSavings.value += todaySavings
+
+                    // 保存到本地存储
+                    localStorage.setItem('savingsData', JSON.stringify({
+                        history: history.value
+                    }))
+
+                    // 更新页面数据
+                    numbers.value = newNumbers
+                    savings.value = todaySavings
+                    hasGeneratedToday.value = true
+
+                    vant.Notify({ type: 'success', message: '生成成功' });
+                }
+
+                function showHistory() {
+                    showHistoryDialog.value = true
                 }
 
                 // 初始化
@@ -190,7 +189,8 @@
                     totalSavings,
                     history,
                     showHistoryDialog,
-                    saveToday,
+                    hasGeneratedToday,
+                    generateAndSaveToday,
                     showHistory
                 }
             }
