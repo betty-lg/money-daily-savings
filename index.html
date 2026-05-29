@@ -7,8 +7,6 @@
     <link rel="stylesheet" href="https://unpkg.com/vant/lib/index.css">
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/vant/lib/vant.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js"></script>
     <style>
         body {
             max-width: 500px;
@@ -47,56 +45,60 @@
         </div>
         <van-button type="primary" block @click="generateNumbers">重新生成</van-button>
         <van-button type="success" block @click="saveToday" style="margin-top: 10px;">保存今日数据</van-button>
+        <van-button type="warning" block @click="showHistory" style="margin-top: 10px;">查看历史</van-button>
+        <van-dialog v-model:show="showHistoryDialog" title="存款历史" show-cancel-button>
+            <van-cell-group>
+                <van-cell v-for="(record, index) in history" :key="index">
+                    {{ record.date }}: {{ record.savings }}元
+                </van-cell>
+            </van-cell-group>
+        </van-dialog>
     </div>
 
     <script>
         const { createApp, ref, onMounted } = Vue
-
-        // Initialize Firebase (replace with your config)
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID"
-        };
-
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
         const app = createApp({
             setup() {
                 const today = ref(new Date().toLocaleDateString())
                 const numbers = ref([])
                 const savings = ref(0)
                 const totalSavings = ref(0)
+                const history = ref([])
+                const showHistoryDialog = ref(false)
 
-                async function loadTotalSavings() {
-                    const docRef = db.collection('savings').doc('total')
-                    const doc = await docRef.get()
-                    if (doc.exists) {
-                        totalSavings.value = doc.data().amount || 0
+                function loadData() {
+                    const savedData = localStorage.getItem('savingsData')
+                    if (savedData) {
+                        const data = JSON.parse(savedData)
+                        totalSavings.value = data.totalSavings || 0
+                        history.value = data.history || []
                     }
                 }
 
-                async function saveToday() {
-                    try {
-                        // 保存今天的数据
-                        await db.collection('daily_savings').add({
-                            date: today.value,
-                            numbers: numbers.value,
-                            savings: savings.value
-                        })
-
-                        // 更新累计存款
-                        const newTotal = totalSavings.value + savings.value
-                        await db.collection('savings').doc('total').set({
-                            amount: newTotal
-                        })
-
-                        totalSavings.value = newTotal
-                        vant.Notify({ type: 'success', message: '保存成功' });
-                    } catch (error) {
-                        vant.Notify({ type: 'danger', message: '保存失败' });
+                function saveToday() {
+                    const record = {
+                        date: today.value,
+                        numbers: numbers.value,
+                        savings: savings.value
                     }
+
+                    // 更新总存款
+                    totalSavings.value += savings.value
+
+                    // 添加到历史记录
+                    history.value.push(record)
+
+                    // 保存到本地存储
+                    localStorage.setItem('savingsData', JSON.stringify({
+                        totalSavings: totalSavings.value,
+                        history: history.value
+                    }))
+
+                    vant.Notify({ type: 'success', message: '保存成功' });
+                }
+
+                function showHistory() {
+                    showHistoryDialog.value = true
                 }
 
                 function generateNumbers() {
@@ -115,10 +117,10 @@
                     savings.value = newNumbers.reduce((a, b) => a + b, 0)
                 }
 
-                // 初始化生成并加载总存款
+                // 初始化
                 onMounted(() => {
                     generateNumbers()
-                    loadTotalSavings()
+                    loadData()
                 })
 
                 return {
@@ -126,8 +128,11 @@
                     numbers,
                     savings,
                     totalSavings,
+                    history,
+                    showHistoryDialog,
                     generateNumbers,
-                    saveToday
+                    saveToday,
+                    showHistory
                 }
             }
         })
