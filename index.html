@@ -39,6 +39,7 @@
         <h1>每日存钱</h1>
         <div class="money-card">
             <p>日期：{{ today }}</p>
+            <p>第 {{ dayNumber }} 天</p>
             <p>随机数：{{ numbers }}</p>
             <p>本次存款：{{ savings }}元</p>
             <p class="total-savings">累计存款：{{ totalSavings }}元</p>
@@ -48,7 +49,7 @@
         <van-dialog v-model:show="showHistoryDialog" title="存款历史" show-cancel-button>
             <van-cell-group>
                 <van-cell v-for="(record, index) in history" :key="index">
-                    {{ record.date }}: {{ record.savings }}元
+                    {{ record.date }}(第{{ record.dayNumber }}天): {{ record.savings }}元
                 </van-cell>
             </van-cell-group>
         </van-dialog>
@@ -60,22 +61,30 @@
             setup() {
                 const startDate = new Date('2026-05-26')
                 const today = ref(new Date().toLocaleDateString())
+                const dayNumber = ref(1)
                 const numbers = ref([])
                 const savings = ref(0)
                 const totalSavings = ref(0)
                 const history = ref([])
                 const showHistoryDialog = ref(false)
 
+                function calculateDayNumber(currentDate) {
+                    const current = new Date(currentDate)
+                    const diff = Math.floor((current - startDate) / (1000 * 60 * 60 * 24)) + 1
+                    return diff
+                }
+
                 function loadData() {
                     const savedData = localStorage.getItem('savingsData')
+
+                    // 计算今天是第几天
+                    dayNumber.value = calculateDayNumber(new Date())
+
                     if (savedData) {
                         const data = JSON.parse(savedData)
-                        // 重新计算累计存款
-                        let cumulativeSavings = 0
-                        data.history.forEach((record, index) => {
-                            cumulativeSavings += record.savings
-                        })
-                        totalSavings.value = cumulativeSavings
+
+                        // 计算累计存款
+                        totalSavings.value = data.history.reduce((total, record) => total + record.savings, 0)
                         history.value = data.history || []
                     }
 
@@ -107,6 +116,7 @@
 
                     const record = {
                         date: today.value,
+                        dayNumber: dayNumber.value,
                         numbers: numbers.value,
                         savings: savings.value
                     }
@@ -121,12 +131,8 @@
                     // 添加到历史记录
                     history.value.push(record)
 
-                    // 更新总存款
-                    totalSavings.value += savings.value
-
                     // 保存到本地存储
                     localStorage.setItem('savingsData', JSON.stringify({
-                        totalSavings: totalSavings.value,
                         history: history.value
                     }))
 
@@ -178,6 +184,7 @@
 
                 return {
                     today,
+                    dayNumber,
                     numbers,
                     savings,
                     totalSavings,
