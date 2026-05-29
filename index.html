@@ -89,7 +89,20 @@
                     return diff
                 }
 
+                function resetDataIfNeeded() {
+                    const savedStartDate = localStorage.getItem('startDate')
+                    if (!savedStartDate || savedStartDate !== startDate.toLocaleDateString()) {
+                        // 清空所有历史数据
+                        localStorage.removeItem('savingsData')
+                        localStorage.removeItem('todayData')
+                        localStorage.setItem('startDate', startDate.toLocaleDateString())
+                    }
+                }
+
                 function loadData() {
+                    // 重置数据（如果需要）
+                    resetDataIfNeeded()
+
                     const savedData = localStorage.getItem('savingsData')
 
                     // 计算今天是第几天
